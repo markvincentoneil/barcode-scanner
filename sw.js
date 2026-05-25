@@ -1,10 +1,11 @@
-const CACHE = "barcode-scanner-v1-1";
+const CACHE = "barcode-scanner-v1-2";
 
 const PRECACHE = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js",
+  "https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js",
 ];
 
 self.addEventListener("install", (event) => {

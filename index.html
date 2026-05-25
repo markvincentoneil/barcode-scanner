@@ -81,6 +81,10 @@
       cursor: pointer;
     }
     .btn-primary { background: var(--accent); color: #fff; }
+    .btn-capture {
+      background: linear-gradient(135deg, #ea580c, #f97316);
+      color: #fff;
+    }
     .btn-secondary { background: #374151; color: var(--text); }
     .btn-danger { background: #7f1d1d; color: #fecaca; }
     .btn-row {
@@ -151,6 +155,7 @@
     </div>
 
     <button type="button" class="btn btn-primary" id="btnStart">Start camera</button>
+    <button type="button" class="btn btn-capture hidden" id="btnCapture">Scan now</button>
     <button type="button" class="btn btn-secondary hidden" id="btnStop">Stop camera</button>
     <div id="scanStatus" class="status info hidden"></div>
   </div>
@@ -178,16 +183,18 @@
     </div>
   </div>
 
-  <footer>v<span id="appVersion">1.0.0</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+  <footer>v<span id="appVersion">1.0.1</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
-    const APP_VERSION = "1.0.0";
+    const APP_VERSION = "1.0.1";
     const STORAGE_KEY = "barcode-scanner-v1-session";
 
     const roomName = document.getElementById("roomName");
     const scannerWrap = document.getElementById("scannerWrap");
     const btnStart = document.getElementById("btnStart");
+    const btnCapture = document.getElementById("btnCapture");
     const btnStop = document.getElementById("btnStop");
     const scanStatus = document.getElementById("scanStatus");
     const scanCount = document.getElementById("scanCount");
@@ -361,6 +368,149 @@
       addCode(decodedText);
     }
 
+    function getScannerVideo() {
+      return document.querySelector("#reader video");
+    }
+
+    function extractDecodedText(result) {
+      if (!result) return null;
+      if (typeof result === "string") return result;
+      if (typeof result.decodedText === "string") return result.decodedText;
+      return null;
+    }
+
+    function frameToCanvas(video, cropCenter) {
+      const canvas = document.createElement("canvas");
+      if (!cropCenter) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        return canvas;
+      }
+      const cropW = Math.floor(video.videoWidth * 0.92);
+      const cropH = Math.floor(video.videoHeight * 0.45);
+      const sx = Math.floor((video.videoWidth - cropW) / 2);
+      const sy = Math.floor((video.videoHeight - cropH) / 2);
+      canvas.width = cropW;
+      canvas.height = cropH;
+      canvas.getContext("2d").drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+      return canvas;
+    }
+
+    async function decodeCanvasWithZxing(canvas) {
+      if (typeof ZXing === "undefined") return null;
+      const formats = [
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.DATA_MATRIX,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+      ];
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+      const img = new Image();
+      img.src = canvas.toDataURL("image/png");
+      await new Promise(function (resolve, reject) {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const reader = new ZXing.BrowserMultiFormatReader(hints);
+      try {
+        const result = await reader.decodeFromImageElement(img);
+        return result ? result.getText() : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function decodeSnapshotFromCanvas(canvas) {
+      const blob = await new Promise(function (resolve) {
+        canvas.toBlob(resolve, "image/jpeg", 0.95);
+      });
+      if (!blob) return null;
+
+      const file = new File([blob], "barcode-snapshot.jpg", { type: "image/jpeg" });
+
+      if (scanner && typeof scanner.pause === "function") {
+        try {
+          await scanner.pause(true);
+        } catch (e) {
+          console.debug("pause", e);
+        }
+      }
+
+      try {
+        if (scanner && typeof scanner.scanFileV2 === "function") {
+          const r = await scanner.scanFileV2(file, false);
+          const text = extractDecodedText(r);
+          if (text) return text;
+        }
+        if (scanner && typeof scanner.scanFile === "function") {
+          const r = await scanner.scanFile(file, false);
+          const text = extractDecodedText(r);
+          if (text) return text;
+        }
+      } catch (e) {
+        console.debug("html5-qrcode file scan", e);
+      }
+
+      return decodeCanvasWithZxing(canvas);
+    }
+
+    async function captureAndScan() {
+      if (!scanner || !isScanning) {
+        showStatus(scanStatus, "Start the camera first.", "warn");
+        return;
+      }
+
+      const video = getScannerVideo();
+      if (!video || !video.videoWidth) {
+        showStatus(scanStatus, "Camera still loading — wait a moment and try again.", "warn");
+        return;
+      }
+
+      showStatus(scanStatus, "Capturing…", "info");
+      btnCapture.disabled = true;
+
+      try {
+        let decoded = await decodeSnapshotFromCanvas(frameToCanvas(video, false));
+        if (!decoded) {
+          decoded = await decodeSnapshotFromCanvas(frameToCanvas(video, true));
+        }
+        if (!decoded) {
+          showStatus(
+            scanStatus,
+            "No barcode in that shot — center the tag, hold steady, then tap Scan now again.",
+            "warn"
+          );
+          return;
+        }
+        addCode(decoded);
+      } catch (e) {
+        console.warn(e);
+        showStatus(
+          scanStatus,
+          "Could not read the barcode. Center the tag and tap Scan now again.",
+          "warn"
+        );
+      } finally {
+        btnCapture.disabled = false;
+        if (scanner && typeof scanner.resume === "function") {
+          try {
+            await scanner.resume();
+          } catch (e) {
+            console.debug("resume", e);
+          }
+        }
+      }
+    }
+
     function clearReaderElement() {
       const readerEl = document.getElementById("reader");
       if (readerEl) readerEl.innerHTML = "";
@@ -424,8 +574,13 @@
 
         isScanning = true;
         btnStart.classList.add("hidden");
+        btnCapture.classList.remove("hidden");
         btnStop.classList.remove("hidden");
-        showStatus(scanStatus, "Scanning — point at each asset tag.", "ok");
+        showStatus(
+          scanStatus,
+          "Point at each tag — it may scan automatically, or tap Scan now.",
+          "ok"
+        );
       } catch (e) {
         console.error(e);
         await stopCamera();
@@ -448,10 +603,12 @@
       scannerWrap.classList.add("hidden");
       btnStart.disabled = false;
       btnStart.classList.remove("hidden");
+      btnCapture.classList.add("hidden");
       btnStop.classList.add("hidden");
     }
 
     btnStart.addEventListener("click", startCamera);
+    btnCapture.addEventListener("click", captureAndScan);
     btnStop.addEventListener("click", stopCamera);
 
     btnAddManual.addEventListener("click", function () {
