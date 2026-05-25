@@ -1,0 +1,6 @@
+v1.0.0 — Initial release
+- Room/location label (optional, included in exports)
+- Camera scan (Code 128, Code 39, QR, UPC/EAN, Data Matrix)
+- Manual add, duplicate detection, remove one / clear all / undo last
+- Copy, download .txt, Share, email export
+- Session saved in browser localStorage until cleared

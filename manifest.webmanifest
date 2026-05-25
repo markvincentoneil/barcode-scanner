@@ -1,0 +1,11 @@
+{
+  "name": "Barcode Scanner",
+  "short_name": "Barcodes",
+  "description": "Scan asset tags in a room and export a text list",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "orientation": "portrait"
+}

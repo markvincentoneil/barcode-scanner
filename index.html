@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Barcode Scanner" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f1419" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Barcode Scanner v1</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e8eef4;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --border: #2d3a4f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+      line-height: 1.45;
+    }
+    h1 { font-size: 1.35rem; margin: 0 0 6px; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+    }
+    .scanner-wrap {
+      position: relative;
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000;
+      min-height: 160px;
+    }
+    #reader video {
+      width: 100% !important;
+      max-height: 200px !important;
+      object-fit: cover;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #374151; color: var(--text); }
+    .btn-danger { background: #7f1d1d; color: #fecaca; }
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .btn-row .btn { margin-top: 0; }
+    .status {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+    }
+    .status.info { background: #1e3a5f; color: #bfdbfe; }
+    .status.ok { background: #14532d; color: #bbf7d0; }
+    .status.warn { background: #78350f; color: #fde68a; }
+    .status.err { background: #7f1d1d; color: #fecaca; }
+    .hidden { display: none !important; }
+    .count-badge {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--ok);
+    }
+    ul.scan-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    ul.scan-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.95rem;
+    }
+    ul.scan-list li span.idx {
+      color: var(--muted);
+      min-width: 1.5rem;
+    }
+    ul.scan-list li span.code { flex: 1; word-break: break-all; }
+    ul.scan-list button {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    footer { color: var(--muted); font-size: 0.82rem; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Barcode Scanner</h1>
+  <p class="subtitle">Scan asset tags in a room, then export a text list for your computer.</p>
+
+  <div class="card">
+    <label for="roomName">Room or location (optional)</label>
+    <input type="text" id="roomName" placeholder="e.g. Lab 204, Cart A" autocomplete="off" />
+
+    <div class="scanner-wrap hidden" id="scannerWrap">
+      <div id="reader"></div>
+    </div>
+
+    <button type="button" class="btn btn-primary" id="btnStart">Start camera</button>
+    <button type="button" class="btn btn-secondary hidden" id="btnStop">Stop camera</button>
+    <div id="scanStatus" class="status info hidden"></div>
+  </div>
+
+  <div class="card">
+    <p>Scanned: <span class="count-badge" id="scanCount">0</span></p>
+    <ul class="scan-list" id="scanList"></ul>
+    <p id="emptyHint" class="subtitle" style="margin: 12px 0 0;">No barcodes yet — start the camera and scan device tags.</p>
+
+    <label for="manualCode" style="margin-top: 14px;">Type code manually</label>
+    <input type="text" id="manualCode" placeholder="Paste or type asset tag" autocomplete="off" />
+    <button type="button" class="btn btn-secondary" id="btnAddManual">Add to list</button>
+  </div>
+
+  <div class="card">
+    <strong style="font-size: 0.95rem;">Export</strong>
+    <button type="button" class="btn btn-primary" id="btnCopy">Copy list to clipboard</button>
+    <button type="button" class="btn btn-secondary" id="btnDownload">Download .txt file</button>
+    <button type="button" class="btn btn-secondary" id="btnShare">Share / AirDrop</button>
+    <button type="button" class="btn btn-secondary" id="btnEmail">Email list to myself</button>
+    <div id="exportStatus" class="status hidden"></div>
+    <div class="btn-row" style="margin-top: 12px;">
+      <button type="button" class="btn btn-danger" id="btnClear">Clear all</button>
+      <button type="button" class="btn btn-secondary" id="btnUndo">Remove last</button>
+    </div>
+  </div>
+
+  <footer>v<span id="appVersion">1.0.0</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    const APP_VERSION = "1.0.0";
+    const STORAGE_KEY = "barcode-scanner-v1-session";
+
+    const roomName = document.getElementById("roomName");
+    const scannerWrap = document.getElementById("scannerWrap");
+    const btnStart = document.getElementById("btnStart");
+    const btnStop = document.getElementById("btnStop");
+    const scanStatus = document.getElementById("scanStatus");
+    const scanCount = document.getElementById("scanCount");
+    const scanList = document.getElementById("scanList");
+    const emptyHint = document.getElementById("emptyHint");
+    const manualCode = document.getElementById("manualCode");
+    const btnAddManual = document.getElementById("btnAddManual");
+    const btnCopy = document.getElementById("btnCopy");
+    const btnDownload = document.getElementById("btnDownload");
+    const btnShare = document.getElementById("btnShare");
+    const btnEmail = document.getElementById("btnEmail");
+    const btnClear = document.getElementById("btnClear");
+    const btnUndo = document.getElementById("btnUndo");
+    const exportStatus = document.getElementById("exportStatus");
+
+    let scanner = null;
+    let isScanning = false;
+    let codes = [];
+    let lastAdded = null;
+    let lastAddedAt = 0;
+    const DEDUPE_MS = 2000;
+
+    function showStatus(el, msg, type) {
+      el.textContent = msg;
+      el.className = "status " + type;
+      el.classList.remove("hidden");
+    }
+
+    function hideStatus(el) {
+      el.classList.add("hidden");
+    }
+
+    function normalizeCode(raw) {
+      return String(raw || "").trim();
+    }
+
+    function saveSession() {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            room: roomName.value.trim(),
+            codes: codes.slice(),
+            at: Date.now(),
+          })
+        );
+      } catch (e) {
+        console.warn("saveSession", e);
+      }
+    }
+
+    function loadSession() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data.room) roomName.value = data.room;
+        if (Array.isArray(data.codes)) codes = data.codes.map(normalizeCode).filter(Boolean);
+      } catch (e) {
+        console.warn("loadSession", e);
+      }
+    }
+
+    function renderList() {
+      scanCount.textContent = String(codes.length);
+      emptyHint.classList.toggle("hidden", codes.length > 0);
+      scanList.innerHTML = codes
+        .map(function (code, i) {
+          return (
+            '<li><span class="idx">' +
+            (i + 1) +
+            '.</span><span class="code">' +
+            escapeHtml(code) +
+            '</span><button type="button" data-i="' +
+            i +
+            '">Remove</button></li>'
+          );
+        })
+        .join("");
+
+      scanList.querySelectorAll("button[data-i]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const idx = parseInt(btn.getAttribute("data-i"), 10);
+          if (idx >= 0 && idx < codes.length) {
+            codes.splice(idx, 1);
+            saveSession();
+            renderList();
+          }
+        });
+      });
+    }
+
+    function escapeHtml(s) {
+      return s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function addCode(raw) {
+      const code = normalizeCode(raw);
+      if (!code) {
+        showStatus(scanStatus, "Empty code — scan again or type a value.", "warn");
+        return false;
+      }
+
+      const now = Date.now();
+      if (code === lastAdded && now - lastAddedAt < DEDUPE_MS) {
+        return false;
+      }
+      lastAdded = code;
+      lastAddedAt = now;
+
+      if (codes.indexOf(code) >= 0) {
+        showStatus(scanStatus, "Already in list: " + code, "warn");
+        if (navigator.vibrate) navigator.vibrate(40);
+        return false;
+      }
+
+      codes.push(code);
+      saveSession();
+      renderList();
+      showStatus(scanStatus, "Added: " + code, "ok");
+      if (navigator.vibrate) navigator.vibrate(80);
+      return true;
+    }
+
+    function buildExportText() {
+      const room = roomName.value.trim();
+      const lines = [];
+      const date = new Date().toLocaleString();
+      if (room) lines.push("Room: " + room);
+      lines.push("Date: " + date);
+      lines.push("Count: " + codes.length);
+      lines.push("");
+      codes.forEach(function (c) {
+        lines.push(c);
+      });
+      return lines.join("\n");
+    }
+
+    function buildPlainList() {
+      return codes.join("\n");
+    }
+
+    function safeFilename() {
+      const room = roomName.value.trim() || "scan";
+      const safe = room.replace(/[^a-zA-Z0-9-_]+/g, "-").replace(/^-|-$/g, "") || "scan";
+      const d = new Date().toISOString().slice(0, 10);
+      return "devices-" + safe + "-" + d + ".txt";
+    }
+
+    async function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+
+    function onScanSuccess(decodedText) {
+      addCode(decodedText);
+    }
+
+    function clearReaderElement() {
+      const readerEl = document.getElementById("reader");
+      if (readerEl) readerEl.innerHTML = "";
+    }
+
+    async function startCamera() {
+      if (isScanning) return;
+      if (typeof Html5Qrcode === "undefined") {
+        showStatus(scanStatus, "Scanner library not loaded. Check connection and reload.", "err");
+        return;
+      }
+      if (!window.isSecureContext) {
+        showStatus(
+          scanStatus,
+          "Camera needs HTTPS. Run serve-https.py and open https://YOUR-PC-IP:8443/",
+          "err"
+        );
+        return;
+      }
+
+      hideStatus(scanStatus);
+      btnStart.disabled = true;
+      scannerWrap.classList.remove("hidden");
+      showStatus(scanStatus, "Starting camera…", "info");
+
+      try {
+        scanner = new Html5Qrcode("reader", { verbose: false });
+        const formatsToSupport = [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+        ];
+
+        const config = { fps: 10, formatsToSupport, disableFlip: false };
+        const attempts = [{ facingMode: "environment" }, { facingMode: "user" }];
+        let err = null;
+
+        for (let i = 0; i < attempts.length; i++) {
+          try {
+            await scanner.start(attempts[i], config, onScanSuccess, function () {});
+            err = null;
+            break;
+          } catch (e) {
+            err = e;
+            try {
+              await scanner.stop();
+              await scanner.clear();
+            } catch (ignore) {}
+            clearReaderElement();
+            if (i < attempts.length - 1) {
+              scanner = new Html5Qrcode("reader", { verbose: false });
+            }
+          }
+        }
+        if (err) throw err;
+
+        isScanning = true;
+        btnStart.classList.add("hidden");
+        btnStop.classList.remove("hidden");
+        showStatus(scanStatus, "Scanning — point at each asset tag.", "ok");
+      } catch (e) {
+        console.error(e);
+        await stopCamera();
+        showStatus(scanStatus, "Camera error: " + (e.message || e), "err");
+      }
+    }
+
+    async function stopCamera() {
+      if (scanner) {
+        try {
+          if (isScanning) await scanner.stop();
+          await scanner.clear();
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+      scanner = null;
+      isScanning = false;
+      clearReaderElement();
+      scannerWrap.classList.add("hidden");
+      btnStart.disabled = false;
+      btnStart.classList.remove("hidden");
+      btnStop.classList.add("hidden");
+    }
+
+    btnStart.addEventListener("click", startCamera);
+    btnStop.addEventListener("click", stopCamera);
+
+    btnAddManual.addEventListener("click", function () {
+      if (addCode(manualCode.value)) manualCode.value = "";
+    });
+
+    manualCode.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        if (addCode(manualCode.value)) manualCode.value = "";
+      }
+    });
+
+    roomName.addEventListener("change", saveSession);
+    roomName.addEventListener("blur", saveSession);
+
+    btnCopy.addEventListener("click", async function () {
+      if (!codes.length) {
+        showStatus(exportStatus, "List is empty.", "warn");
+        return;
+      }
+      try {
+        await copyText(buildPlainList());
+        showStatus(exportStatus, "Copied " + codes.length + " code(s) — paste into Notepad or Excel.", "ok");
+      } catch (e) {
+        showStatus(exportStatus, "Copy failed. Use Download .txt instead.", "err");
+      }
+    });
+
+    btnDownload.addEventListener("click", function () {
+      if (!codes.length) {
+        showStatus(exportStatus, "List is empty.", "warn");
+        return;
+      }
+      const blob = new Blob([buildExportText()], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = safeFilename();
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showStatus(exportStatus, "Download started — open the file on your computer.", "ok");
+    });
+
+    btnShare.addEventListener("click", async function () {
+      if (!codes.length) {
+        showStatus(exportStatus, "List is empty.", "warn");
+        return;
+      }
+      const text = buildExportText();
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: "Device barcode list",
+            text: text,
+          });
+          showStatus(exportStatus, "Shared.", "ok");
+          return;
+        } catch (e) {
+          if (e.name === "AbortError") return;
+        }
+      }
+      try {
+        await copyText(text);
+        showStatus(exportStatus, "Share not available — list copied to clipboard instead.", "ok");
+      } catch (e) {
+        showStatus(exportStatus, "Use Download .txt or Email.", "warn");
+      }
+    });
+
+    btnEmail.addEventListener("click", function () {
+      if (!codes.length) {
+        showStatus(exportStatus, "List is empty.", "warn");
+        return;
+      }
+      const text = buildExportText();
+      if (text.length > 1800) {
+        showStatus(
+          exportStatus,
+          "List is long for email — use Download or Share, or copy plain list.",
+          "warn"
+        );
+        return;
+      }
+      const room = roomName.value.trim() || "Device scan";
+      const subject = encodeURIComponent("Barcodes: " + room);
+      const body = encodeURIComponent(text);
+      window.location.href = "mailto:?subject=" + subject + "&body=" + body;
+      showStatus(exportStatus, "Opening Mail — send to yourself to open on a PC.", "ok");
+    });
+
+    btnClear.addEventListener("click", function () {
+      if (codes.length && !confirm("Clear all " + codes.length + " scanned codes?")) return;
+      codes = [];
+      saveSession();
+      renderList();
+      hideStatus(exportStatus);
+      showStatus(scanStatus, "List cleared.", "info");
+    });
+
+    btnUndo.addEventListener("click", function () {
+      if (!codes.length) return;
+      const removed = codes.pop();
+      saveSession();
+      renderList();
+      showStatus(scanStatus, "Removed: " + removed, "info");
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden && isScanning) stopCamera();
+    });
+
+    loadSession();
+    renderList();
+    document.getElementById("appVersion").textContent = APP_VERSION;
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("./sw.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>

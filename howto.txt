@@ -1,0 +1,47 @@
+Barcode Scanner v1 — How to use
+================================
+
+Purpose
+  Scan device asset barcodes in a room, build a list, and get that list
+  onto your computer (copy, download .txt, Share, or email).
+
+Requirements
+  - iPhone with Safari (or add to Home Screen as a web app)
+  - Same Wi-Fi as your PC for local testing, OR a hosted HTTPS URL
+  - Camera permission allowed for Safari
+
+Local test on iPhone (same Wi-Fi as PC)
+  1. Open PowerShell in this folder (v1).
+  2. Run:  python serve-https.py
+  3. On the iPhone, open the https://YOUR-PC-IP:8443/ URL shown.
+  4. Accept the certificate warning once (Advanced → visit site).
+  5. Allow camera when asked.
+
+Using the app
+  1. Optional: enter Room or location (e.g. Lab 204).
+  2. Tap Start camera and scan each asset tag.
+  3. Duplicates are ignored; status shows each new code.
+  4. You can type/paste a code and tap Add to list.
+  5. When done, use Export:
+     - Copy list — one barcode per line (good for Excel)
+     - Download .txt — file with room, date, and all codes
+     - Share / AirDrop — iOS share sheet
+     - Email list — opens Mail with the list in the body (best for short lists)
+
+Getting the list on a computer
+  - Email: send to yourself, open on PC, copy from the message.
+  - Download: on iPhone use Files or AirDrop the .txt to the PC.
+  - Copy: paste into Notepad, Excel, or your inventory script.
+
+Tips
+  - The list stays on this phone until you tap Clear all (survives refresh).
+  - Stop camera when finished scanning to save battery.
+  - For a permanent URL, upload everything in this v1 folder to HTTPS hosting.
+
+Files
+  index.html          — the app
+  serve-https.py      — local HTTPS server for testing
+  manifest.webmanifest — optional Home Screen install
+  sw.js               — offline cache for the app shell
+
+Version: 1.0.0
