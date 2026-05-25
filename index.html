@@ -209,7 +209,7 @@
 <body>
   <div class="app-header">
     <h1>Barcode Scanner</h1>
-    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.0.12</span>
+    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.0.13</span>
   </div>
   <p class="subtitle">Scan asset tags in a room, then export a text list for your computer.</p>
 
@@ -253,14 +253,14 @@
     </div>
   </div>
 
-  <footer>v<span id="appVersion">1.0.12</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+  <footer>v<span id="appVersion">1.0.13</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
 
   <audio id="shutterAudio" preload="auto" playsinline></audio>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
-    const APP_VERSION = "1.0.12";
+    const APP_VERSION = "1.0.13";
     const TARGET_CAMERA_ZOOM = 2;
     const STORAGE_KEY = "barcode-scanner-v1-session";
     const DEFAULT_SCHOOL = "Abbotsford School District";
@@ -696,7 +696,7 @@
 
       autoScanBusy = true;
       try {
-        const canvas = frameToCanvas(video, false);
+        const canvas = frameToVisiblePreview(video);
         if (measureSharpness(canvas) < AUTO_SCAN_SHARPNESS_MIN) {
           resetAutoScanStreak();
           return;
@@ -726,7 +726,9 @@
       }
     }
 
-    function onScanSuccess(decodedText) {
+    function onScanSuccess(decodedText, decodedResult) {
+      if (!isScanInsidePreview(decodedResult)) return;
+
       const code = normalizeCode(decodedText);
       if (!code) return;
 
@@ -746,29 +748,116 @@
       return document.querySelector("#reader video");
     }
 
-    function extractDecodedText(result) {
-      if (!result) return null;
-      if (typeof result === "string") return result;
-      if (typeof result.decodedText === "string") return result.decodedText;
-      return null;
+    function isPreviewZoomActive() {
+      return scannerWrap.classList.contains("preview-zoom");
     }
 
-    function frameToCanvas(video, cropCenter) {
+    function getVisibleVideoCropRect(video) {
+      if (!video || !video.videoWidth || !video.videoHeight) return null;
+
+      const elW = scannerWrap.clientWidth || video.clientWidth;
+      const elH = scannerWrap.clientHeight || video.clientHeight;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const scale = Math.max(elW / vw, elH / vh);
+
+      let sx = (vw - elW / scale) / 2;
+      let sy = (vh - elH / scale) / 2;
+      let sw = elW / scale;
+      let sh = elH / scale;
+
+      if (isPreviewZoomActive()) {
+        sx += sw * 0.25;
+        sy += sh * 0.25;
+        sw *= 0.5;
+        sh *= 0.5;
+      }
+
+      return {
+        sx: Math.max(0, Math.floor(sx)),
+        sy: Math.max(0, Math.floor(sy)),
+        sw: Math.max(1, Math.min(vw, Math.floor(sw))),
+        sh: Math.max(1, Math.min(vh, Math.floor(sh))),
+      };
+    }
+
+    function frameToVisiblePreview(video) {
       const canvas = document.createElement("canvas");
-      if (!cropCenter) {
+      const crop = getVisibleVideoCropRect(video);
+      if (!crop) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
         return canvas;
       }
-      const cropW = Math.floor(video.videoWidth * 0.75);
-      const cropH = Math.floor(video.videoHeight * 0.35);
-      const sx = Math.floor((video.videoWidth - cropW) / 2);
-      const sy = Math.floor((video.videoHeight - cropH) / 2);
-      canvas.width = cropW;
-      canvas.height = cropH;
-      canvas.getContext("2d").drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+      canvas.width = crop.sw;
+      canvas.height = crop.sh;
+      canvas
+        .getContext("2d")
+        .drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh);
       return canvas;
+    }
+
+    function isScanInsidePreview(decodedResult) {
+      if (!decodedResult || !decodedResult.resultPoints || !decodedResult.resultPoints.length) {
+        return false;
+      }
+
+      const video = getScannerVideo();
+      const crop = getVisibleVideoCropRect(video);
+      if (!crop) return false;
+
+      const reader = document.getElementById("reader");
+      const rw = reader ? reader.clientWidth : 0;
+      const rh = reader ? reader.clientHeight : 0;
+      let maxX = 0;
+      let maxY = 0;
+      decodedResult.resultPoints.forEach(function (p) {
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      });
+      const normalized = maxX <= 1.5 && maxY <= 1.5;
+      const videoCoords = !normalized && (maxX > rw + 2 || maxY > rh + 2);
+      const margin = 6;
+
+      return decodedResult.resultPoints.every(function (p) {
+        if (normalized) {
+          return (
+            p.x * rw >= margin &&
+            p.x * rw <= rw - margin &&
+            p.y * rh >= margin &&
+            p.y * rh <= rh - margin
+          );
+        }
+        if (videoCoords) {
+          return (
+            p.x >= crop.sx &&
+            p.x <= crop.sx + crop.sw &&
+            p.y >= crop.sy &&
+            p.y <= crop.sy + crop.sh
+          );
+        }
+        return (
+          p.x >= margin &&
+          p.x <= rw - margin &&
+          p.y >= margin &&
+          p.y <= rh - margin
+        );
+      });
+    }
+
+    function qrboxForPreview(viewfinderWidth, viewfinderHeight) {
+      return {
+        width: Math.floor(viewfinderWidth * 0.98),
+        height: Math.floor(viewfinderHeight * 0.98),
+      };
+    }
+
+    function extractDecodedText(result) {
+      if (!result) return null;
+      if (typeof result === "string") return result;
+      if (typeof result.decodedText === "string") return result.decodedText;
+      return null;
     }
 
     async function decodeCanvasWithZxing(canvas) {
@@ -853,14 +942,11 @@
       btnCapture.disabled = true;
 
       try {
-        let decoded = await decodeSnapshotFromCanvas(frameToCanvas(video, false));
-        if (!decoded) {
-          decoded = await decodeSnapshotFromCanvas(frameToCanvas(video, true));
-        }
+        let decoded = await decodeSnapshotFromCanvas(frameToVisiblePreview(video));
         if (!decoded) {
           showStatus(
             scanStatus,
-            "No barcode in that shot — center the tag, hold steady, then tap Scan now again.",
+            "No barcode in the preview — center the tag in the window, hold steady, then tap Scan now again.",
             "warn"
           );
           return;
@@ -975,6 +1061,7 @@
           fps: 15,
           formatsToSupport,
           disableFlip: false,
+          qrbox: qrboxForPreview,
         };
         const attempts = [
           buildCameraRequest("environment"),
@@ -1021,7 +1108,7 @@
           : " Hold the tag in the center of the preview.";
         showStatus(
           scanStatus,
-          "Aim the tag in the preview — auto-scan or tap Scan now." + zoomHint,
+          "Keep the tag inside the preview window — auto-scan or tap Scan now." + zoomHint,
           "ok"
         );
       } catch (e) {
