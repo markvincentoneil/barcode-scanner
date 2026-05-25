@@ -30,7 +30,31 @@
       padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
       line-height: 1.45;
     }
-    h1 { font-size: 1.35rem; margin: 0 0 6px; }
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 0 0 6px;
+    }
+    .app-header h1 {
+      font-size: 1.35rem;
+      margin: 0;
+      flex: 1;
+      min-width: 0;
+    }
+    .version-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
     .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
     .card {
       background: var(--card);
@@ -173,7 +197,10 @@
   </style>
 </head>
 <body>
-  <h1>Barcode Scanner</h1>
+  <div class="app-header">
+    <h1>Barcode Scanner</h1>
+    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.0.5</span>
+  </div>
   <p class="subtitle">Scan asset tags in a room, then export a text list for your computer.</p>
 
   <div class="card">
@@ -216,7 +243,7 @@
     </div>
   </div>
 
-  <footer>v<span id="appVersion">1.0.4</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+  <footer>v<span id="appVersion">1.0.5</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
 
   <audio id="shutterAudio" preload="auto" playsinline>
     <source src="./shutter.mp3" type="audio/mpeg" />
@@ -225,7 +252,7 @@
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
-    const APP_VERSION = "1.0.4";
+    const APP_VERSION = "1.0.5";
     const TARGET_CAMERA_ZOOM = 2;
     const STORAGE_KEY = "barcode-scanner-v1-session";
     const DEFAULT_SCHOOL = "Abbotsford School District";
@@ -916,7 +943,11 @@
     loadSession();
     if (!schoolName.value.trim()) schoolName.value = DEFAULT_SCHOOL;
     renderList();
-    document.getElementById("appVersion").textContent = APP_VERSION;
+    const versionLabel = "v" + APP_VERSION;
+    const appVersionBadge = document.getElementById("appVersionBadge");
+    const appVersionEl = document.getElementById("appVersion");
+    if (appVersionBadge) appVersionBadge.textContent = versionLabel;
+    if (appVersionEl) appVersionEl.textContent = APP_VERSION;
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
