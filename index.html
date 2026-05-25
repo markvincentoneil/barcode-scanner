@@ -359,7 +359,7 @@
 <body>
   <div class="app-header">
     <h1>Barcode Scanner</h1>
-    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.2.0</span>
+    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.2.1</span>
   </div>
   <p class="subtitle">Scan asset tags in a room, then export a text list for your computer.</p>
 
@@ -436,6 +436,7 @@
       <label for="techName">Technician name (optional)</label>
       <input type="text" id="techName" placeholder="e.g. M. O'Neil" autocomplete="name" />
 
+      <label class="row"><input type="checkbox" id="setBatterySaver" /> Battery saver (slower scan, less drain)</label>
       <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when camera is on</label>
       <label class="row"><input type="checkbox" id="setScanSound" checked /> Shutter sound on scan</label>
       <label class="row"><input type="checkbox" id="setScanVibrate" checked /> Vibration on scan</label>
@@ -449,14 +450,14 @@
     </div>
   </div>
 
-  <footer>v<span id="appVersion">1.2.0</span> · HTTPS required for camera · Draft and saved sessions stay on this device</footer>
+  <footer>v<span id="appVersion">1.2.1</span> · HTTPS required for camera · Tap Stop camera when done to save battery</footer>
 
   <audio id="shutterAudio" preload="auto" playsinline></audio>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
-    const APP_VERSION = "1.2.0";
+    const APP_VERSION = "1.2.1";
     const TARGET_CAMERA_ZOOM = 2;
     const STORAGE_KEY = "barcode-scanner-v1-session";
     const SETTINGS_KEY = "barcode-scanner-v1-settings";
@@ -503,6 +504,7 @@
     const btnToggleSettings = document.getElementById("btnToggleSettings");
     const settingsBody = document.getElementById("settingsBody");
     const techName = document.getElementById("techName");
+    const setBatterySaver = document.getElementById("setBatterySaver");
     const setAutoScan = document.getElementById("setAutoScan");
     const setScanSound = document.getElementById("setScanSound");
     const setScanVibrate = document.getElementById("setScanVibrate");
@@ -530,11 +532,20 @@
 
     function defaultSettings() {
       return {
+        batterySaver: false,
         autoScan: true,
         scanSound: true,
         scanVibrate: true,
         listSort: "scan",
       };
+    }
+
+    function getScannerFps() {
+      return appSettings.batterySaver ? 6 : 15;
+    }
+
+    function getAutoScanIntervalMs() {
+      return appSettings.batterySaver ? 550 : AUTO_SCAN_INTERVAL_MS;
     }
 
     let appSettings = defaultSettings();
@@ -558,6 +569,7 @@
     }
 
     function applySettingsToUI() {
+      setBatterySaver.checked = appSettings.batterySaver === true;
       setAutoScan.checked = appSettings.autoScan !== false;
       setScanSound.checked = appSettings.scanSound !== false;
       setScanVibrate.checked = appSettings.scanVibrate !== false;
@@ -565,14 +577,25 @@
     }
 
     function readSettingsFromUI() {
+      appSettings.batterySaver = setBatterySaver.checked;
       appSettings.autoScan = setAutoScan.checked;
       appSettings.scanSound = setScanSound.checked;
       appSettings.scanVibrate = setScanVibrate.checked;
       appSettings.listSort = listSort.value;
       saveSettings();
       if (isScanning) {
-        if (appSettings.autoScan) startAutoScan();
-        else stopAutoScan();
+        if (appSettings.autoScan) {
+          startAutoScan();
+          if (appSettings.batterySaver) {
+            showStatus(
+              scanStatus,
+              "Battery saver on — tap Stop camera when finished. Restart camera to apply fully.",
+              "info"
+            );
+          }
+        } else {
+          stopAutoScan();
+        }
       }
       renderList();
     }
@@ -1299,7 +1322,7 @@
       if (!appSettings.autoScan) return;
       autoScanTimer = setInterval(function () {
         void tryAutoScanTick();
-      }, AUTO_SCAN_INTERVAL_MS);
+      }, getAutoScanIntervalMs());
     }
 
     function measureSharpness(canvas) {
@@ -1380,7 +1403,7 @@
     }
 
     function onScanSuccess(decodedText, decodedResult) {
-      if (!appSettings.autoScan) return;
+      if (!appSettings.autoScan || appSettings.batterySaver) return;
       if (!isScanInsidePreview(decodedResult)) return;
 
       const code = normalizeCode(decodedText);
@@ -1722,6 +1745,13 @@
     }
 
     function buildCameraRequest(facingMode) {
+      if (appSettings.batterySaver) {
+        return {
+          facingMode: facingMode,
+          width: { ideal: 960, max: 1280 },
+          height: { ideal: 720, max: 720 },
+        };
+      }
       return {
         facingMode: facingMode,
         width: { ideal: 1920 },
@@ -1803,7 +1833,7 @@
         ];
 
         const config = {
-          fps: 15,
+          fps: getScannerFps(),
           formatsToSupport,
           disableFlip: false,
           qrbox: qrboxForPreview,
@@ -1837,11 +1867,16 @@
 
         isScanning = true;
 
-        const zoomLevel = await applyPreferredZoom();
+        let zoomLevel = null;
+        if (!appSettings.batterySaver) {
+          zoomLevel = await applyPreferredZoom();
+        }
         if (zoomLevel) {
           scannerWrap.classList.remove("preview-zoom");
-        } else {
+        } else if (!appSettings.batterySaver) {
           scannerWrap.classList.add("preview-zoom");
+        } else {
+          scannerWrap.classList.remove("preview-zoom");
         }
         torchOn = false;
         await detectTorchSupport();
@@ -1850,14 +1885,15 @@
         btnStart.classList.add("hidden");
         btnCapture.classList.remove("hidden");
         btnStop.classList.remove("hidden");
-        const zoomHint = zoomLevel
-          ? " Optical zoom on."
-          : " Hold the tag in the center of the preview.";
-        showStatus(
-          scanStatus,
-          "Keep the tag inside the preview window — auto-scan or tap Scan now." + zoomHint,
-          "ok"
-        );
+        let statusMsg = "Keep the tag inside the preview window — auto-scan or tap Scan now.";
+        if (appSettings.batterySaver) {
+          statusMsg += " Battery saver on — tap Stop when done.";
+        } else if (zoomLevel) {
+          statusMsg += " Optical zoom on.";
+        } else {
+          statusMsg += " Hold the tag in the center of the preview.";
+        }
+        showStatus(scanStatus, statusMsg, "ok");
       } catch (e) {
         console.error(e);
         await stopCamera();
@@ -1947,7 +1983,7 @@
       btnToggleSettings.textContent = collapsed ? "Settings ▾" : "Settings ▴";
     });
 
-    [setAutoScan, setScanSound, setScanVibrate].forEach(function (el) {
+    [setBatterySaver, setAutoScan, setScanSound, setScanVibrate].forEach(function (el) {
       el.addEventListener("change", readSettingsFromUI);
     });
 
@@ -2090,7 +2126,10 @@
     });
 
     document.addEventListener("visibilitychange", function () {
-      if (document.hidden && isScanning) stopCamera();
+      if (document.hidden) {
+        stopAutoScan();
+        if (isScanning) stopCamera();
+      }
     });
 
     appSettings = loadSettings();
