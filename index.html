@@ -204,12 +204,162 @@
     }
 
     .field-gap { margin-top: 12px; }
+
+    input[type="search"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+      font-family: inherit;
+    }
+
+    textarea { min-height: 88px; resize: vertical; }
+
+    .list-toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .list-toolbar select { width: auto; min-width: 7.5rem; padding: 10px; }
+
+    .compare-summary {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    ul.scan-list li.row-extra span.code { color: var(--warn); }
+
+    .import-missing {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #78350f;
+      color: #fde68a;
+      font-size: 0.85rem;
+    }
+
+    .import-missing.hidden { display: none !important; }
+
+    .btn-collapse {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 700;
+      width: 100%;
+      text-align: left;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .settings-panel {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .settings-panel label.row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 0.9rem;
+      color: var(--text);
+      margin: 0;
+    }
+
+    .settings-panel label.row input { width: auto; margin: 0; }
+
+    .btn-torch {
+      background: #422006;
+      color: #fde68a;
+    }
+
+    .btn-torch.torch-on {
+      background: #ca8a04;
+      color: #1c1917;
+    }
+
+    .active-session-label {
+      margin: 8px 0 0;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    ul.sessions-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    ul.sessions-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    ul.sessions-list li.sessions-empty {
+      cursor: default;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    ul.sessions-list li.session-active {
+      background: rgba(59, 130, 246, 0.12);
+      margin: 0 -8px;
+      padding-left: 8px;
+      padding-right: 8px;
+      border-radius: 8px;
+    }
+
+    ul.sessions-list .session-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    ul.sessions-list .session-main strong {
+      display: block;
+      font-size: 0.95rem;
+      margin-bottom: 2px;
+    }
+
+    ul.sessions-list .session-meta,
+    ul.sessions-list .session-date {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    ul.sessions-list .session-delete {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
   <div class="app-header">
     <h1>Barcode Scanner</h1>
-    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.0.13</span>
+    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.2.0</span>
   </div>
   <p class="subtitle">Scan asset tags in a room, then export a text list for your computer.</p>
 
@@ -218,6 +368,7 @@
     <input type="text" id="schoolName" placeholder="e.g. Abbotsford School District" autocomplete="off" />
     <label for="roomName" class="field-gap">Room</label>
     <input type="text" id="roomName" placeholder="e.g. Lab 204, Cart A" autocomplete="off" />
+    <button type="button" class="btn btn-secondary" id="btnNewRoom">New room (clear list)</button>
 
     <div id="captureFlash" class="capture-flash" aria-hidden="true"></div>
     <div class="scanner-wrap hidden" id="scannerWrap">
@@ -226,13 +377,26 @@
 
     <button type="button" class="btn btn-primary" id="btnStart">Start camera</button>
     <button type="button" class="btn btn-capture hidden" id="btnCapture">Scan now</button>
+    <button type="button" class="btn btn-torch hidden" id="btnTorch">Flashlight on</button>
     <button type="button" class="btn btn-secondary hidden" id="btnStop">Stop camera</button>
     <div id="scanStatus" class="status info hidden"></div>
   </div>
 
   <div class="card">
-    <p>Scanned: <span class="count-badge" id="scanCount">0</span></p>
+    <p>
+      Scanned: <span class="count-badge" id="scanCount">0</span>
+      <span id="compareSummary" class="compare-summary hidden"></span>
+    </p>
+    <div class="list-toolbar">
+      <input type="search" id="listSearch" placeholder="Search list…" autocomplete="off" />
+      <select id="listSort" aria-label="Sort list">
+        <option value="scan">Scan order</option>
+        <option value="az">A → Z</option>
+        <option value="za">Z → A</option>
+      </select>
+    </div>
     <ul class="scan-list" id="scanList"></ul>
+    <div id="importMissing" class="import-missing hidden"></div>
     <p id="emptyHint" class="subtitle" style="margin: 12px 0 0;">No barcodes yet — start the camera and scan device tags.</p>
 
     <label for="manualCode" style="margin-top: 14px;">Type code manually</label>
@@ -243,7 +407,9 @@
   <div class="card">
     <strong style="font-size: 0.95rem;">Export</strong>
     <button type="button" class="btn btn-primary" id="btnCopy">Copy report to clipboard</button>
+    <button type="button" class="btn btn-secondary" id="btnCopyCsv">Copy CSV to clipboard</button>
     <button type="button" class="btn btn-secondary" id="btnDownload">Download .txt file</button>
+    <button type="button" class="btn btn-secondary" id="btnDownloadCsv">Download .csv file</button>
     <button type="button" class="btn btn-secondary" id="btnShare">Share / AirDrop</button>
     <button type="button" class="btn btn-secondary" id="btnEmail">Email list to myself</button>
     <div id="exportStatus" class="status hidden"></div>
@@ -253,16 +419,48 @@
     </div>
   </div>
 
-  <footer>v<span id="appVersion">1.0.13</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+  <div class="card">
+    <button type="button" class="btn-collapse" id="btnToggleSessions" aria-expanded="false">Saved sessions ▾</button>
+    <p id="activeSessionLabel" class="active-session-label">Current: Unsaved draft</p>
+    <div id="sessionsBody" class="settings-panel hidden">
+      <button type="button" class="btn btn-primary" id="btnSaveSession">Save current session</button>
+      <button type="button" class="btn btn-secondary" id="btnNewSession">Start new empty session</button>
+      <p class="subtitle" style="margin: 0 0 8px;">Tap a session to load it. Saved on this device only.</p>
+      <ul class="sessions-list" id="sessionsList"></ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <button type="button" class="btn-collapse" id="btnToggleSettings" aria-expanded="false">Settings ▾</button>
+    <div id="settingsBody" class="settings-panel hidden">
+      <label for="techName">Technician name (optional)</label>
+      <input type="text" id="techName" placeholder="e.g. M. O'Neil" autocomplete="name" />
+
+      <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when camera is on</label>
+      <label class="row"><input type="checkbox" id="setScanSound" checked /> Shutter sound on scan</label>
+      <label class="row"><input type="checkbox" id="setScanVibrate" checked /> Vibration on scan</label>
+
+      <label for="importExpected">Import expected list (one code per line)</label>
+      <textarea id="importExpected" placeholder="Paste asset tags to compare…"></textarea>
+      <div class="btn-row">
+        <button type="button" class="btn btn-secondary" id="btnApplyImport">Apply import</button>
+        <button type="button" class="btn btn-secondary" id="btnClearImport">Clear expected</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>v<span id="appVersion">1.2.0</span> · HTTPS required for camera · Draft and saved sessions stay on this device</footer>
 
   <audio id="shutterAudio" preload="auto" playsinline></audio>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
-    const APP_VERSION = "1.0.13";
+    const APP_VERSION = "1.2.0";
     const TARGET_CAMERA_ZOOM = 2;
     const STORAGE_KEY = "barcode-scanner-v1-session";
+    const SETTINGS_KEY = "barcode-scanner-v1-settings";
+    const SESSIONS_KEY = "barcode-scanner-v1-sessions";
     const DEFAULT_SCHOOL = "Abbotsford School District";
     const AUTO_SCAN_INTERVAL_MS = 300;
     const AUTO_SCAN_MATCHES = 2;
@@ -281,17 +479,44 @@
     const emptyHint = document.getElementById("emptyHint");
     const manualCode = document.getElementById("manualCode");
     const btnAddManual = document.getElementById("btnAddManual");
+    const btnNewRoom = document.getElementById("btnNewRoom");
+    const btnTorch = document.getElementById("btnTorch");
     const btnCopy = document.getElementById("btnCopy");
+    const btnCopyCsv = document.getElementById("btnCopyCsv");
     const btnDownload = document.getElementById("btnDownload");
+    const btnDownloadCsv = document.getElementById("btnDownloadCsv");
     const btnShare = document.getElementById("btnShare");
     const btnEmail = document.getElementById("btnEmail");
     const btnClear = document.getElementById("btnClear");
     const btnUndo = document.getElementById("btnUndo");
     const exportStatus = document.getElementById("exportStatus");
+    const listSearch = document.getElementById("listSearch");
+    const listSort = document.getElementById("listSort");
+    const compareSummary = document.getElementById("compareSummary");
+    const importMissing = document.getElementById("importMissing");
+    const btnToggleSessions = document.getElementById("btnToggleSessions");
+    const sessionsBody = document.getElementById("sessionsBody");
+    const activeSessionLabel = document.getElementById("activeSessionLabel");
+    const btnSaveSession = document.getElementById("btnSaveSession");
+    const btnNewSession = document.getElementById("btnNewSession");
+    const sessionsList = document.getElementById("sessionsList");
+    const btnToggleSettings = document.getElementById("btnToggleSettings");
+    const settingsBody = document.getElementById("settingsBody");
+    const techName = document.getElementById("techName");
+    const setAutoScan = document.getElementById("setAutoScan");
+    const setScanSound = document.getElementById("setScanSound");
+    const setScanVibrate = document.getElementById("setScanVibrate");
+    const importExpected = document.getElementById("importExpected");
+    const btnApplyImport = document.getElementById("btnApplyImport");
+    const btnClearImport = document.getElementById("btnClearImport");
 
     let scanner = null;
     let isScanning = false;
     let codes = [];
+    let expectedCodes = [];
+    let activeSessionId = null;
+    let torchOn = false;
+    let torchSupported = false;
     let lastAdded = null;
     let lastAddedAt = 0;
     const DEDUPE_MS = 2000;
@@ -302,6 +527,55 @@
     let autoScanTimer = null;
     let autoScanBusy = false;
     let autoScanStreak = { code: null, count: 0 };
+
+    function defaultSettings() {
+      return {
+        autoScan: true,
+        scanSound: true,
+        scanVibrate: true,
+        listSort: "scan",
+      };
+    }
+
+    let appSettings = defaultSettings();
+
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        if (!raw) return defaultSettings();
+        return Object.assign(defaultSettings(), JSON.parse(raw));
+      } catch (e) {
+        return defaultSettings();
+      }
+    }
+
+    function saveSettings() {
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
+      } catch (e) {
+        console.warn("saveSettings", e);
+      }
+    }
+
+    function applySettingsToUI() {
+      setAutoScan.checked = appSettings.autoScan !== false;
+      setScanSound.checked = appSettings.scanSound !== false;
+      setScanVibrate.checked = appSettings.scanVibrate !== false;
+      listSort.value = appSettings.listSort || "scan";
+    }
+
+    function readSettingsFromUI() {
+      appSettings.autoScan = setAutoScan.checked;
+      appSettings.scanSound = setScanSound.checked;
+      appSettings.scanVibrate = setScanVibrate.checked;
+      appSettings.listSort = listSort.value;
+      saveSettings();
+      if (isScanning) {
+        if (appSettings.autoScan) startAutoScan();
+        else stopAutoScan();
+      }
+      renderList();
+    }
 
     function showStatus(el, msg, type) {
       el.textContent = msg;
@@ -333,17 +607,102 @@
       return sanitizePlainText(raw);
     }
 
+    function getSessionSnapshot() {
+      return {
+        school: schoolName.value.trim(),
+        room: roomName.value.trim(),
+        techName: techName.value.trim(),
+        codes: codes.slice(),
+        expectedCodes: expectedCodes.slice(),
+      };
+    }
+
+    function applySessionSnapshot(data) {
+      if (data.school) schoolName.value = data.school;
+      else if (!schoolName.value.trim()) schoolName.value = DEFAULT_SCHOOL;
+      if (data.room !== undefined) roomName.value = data.room;
+      if (data.techName !== undefined) techName.value = data.techName;
+      codes = Array.isArray(data.codes) ? data.codes.map(normalizeCode).filter(Boolean) : [];
+      expectedCodes = Array.isArray(data.expectedCodes)
+        ? data.expectedCodes.map(normalizeCode).filter(Boolean)
+        : [];
+      importExpected.value = expectedCodes.join("\n");
+      lastAdded = null;
+      lastAddedAt = 0;
+      resetAutoScanStreak();
+      renderList();
+    }
+
+    function loadAllSessions() {
+      try {
+        const raw = localStorage.getItem(SESSIONS_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        console.warn("loadAllSessions", e);
+        return [];
+      }
+    }
+
+    function saveAllSessions(list) {
+      try {
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify(list));
+      } catch (e) {
+        console.warn("saveAllSessions", e);
+      }
+    }
+
+    function defaultSessionName() {
+      const room = sanitizePlainText(roomName.value);
+      const school = sanitizePlainText(schoolName.value);
+      const d = new Date().toLocaleDateString();
+      if (room) return room + " — " + d;
+      if (school) return school + " — " + d;
+      return "Scan — " + d;
+    }
+
+    function updateActiveSessionLabel() {
+      if (!activeSessionId) {
+        activeSessionLabel.textContent = "Current: Unsaved draft";
+        return;
+      }
+      const sessions = loadAllSessions();
+      const s = sessions.find(function (x) {
+        return x.id === activeSessionId;
+      });
+      if (!s) {
+        activeSessionLabel.textContent = "Current: Unsaved draft";
+        activeSessionId = null;
+        return;
+      }
+      const n = s.codes ? s.codes.length : 0;
+      activeSessionLabel.textContent = "Current: " + s.name + " (" + n + " codes)";
+    }
+
+    function syncActiveSavedSession() {
+      if (!activeSessionId) return;
+      const sessions = loadAllSessions();
+      const idx = sessions.findIndex(function (s) {
+        return s.id === activeSessionId;
+      });
+      if (idx < 0) return;
+      sessions[idx] = Object.assign({}, sessions[idx], getSessionSnapshot(), {
+        id: activeSessionId,
+        savedAt: Date.now(),
+      });
+      saveAllSessions(sessions);
+      renderSessionsList();
+      updateActiveSessionLabel();
+    }
+
     function saveSession() {
       try {
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({
-            school: schoolName.value.trim(),
-            room: roomName.value.trim(),
-            codes: codes.slice(),
-            at: Date.now(),
-          })
+          JSON.stringify(
+            Object.assign({ activeSessionId: activeSessionId, at: Date.now() }, getSessionSnapshot())
+          )
         );
+        syncActiveSavedSession();
       } catch (e) {
         console.warn("saveSession", e);
       }
@@ -354,42 +713,313 @@
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return;
         const data = JSON.parse(raw);
-        if (data.school) schoolName.value = data.school;
-        else if (!schoolName.value.trim()) schoolName.value = DEFAULT_SCHOOL;
-        if (data.room) roomName.value = data.room;
-        if (Array.isArray(data.codes)) codes = data.codes.map(normalizeCode).filter(Boolean);
+        if (data.activeSessionId) activeSessionId = data.activeSessionId;
+        applySessionSnapshot(data);
       } catch (e) {
         console.warn("loadSession", e);
+      }
+      updateActiveSessionLabel();
+    }
+
+    function promptSessionName(defaultName) {
+      const entered = prompt("Session name:", defaultName);
+      if (entered === null) return null;
+      const name = sanitizePlainText(entered);
+      return name || defaultName;
+    }
+
+    function saveCurrentSession() {
+      const sessions = loadAllSessions();
+      let name;
+      let id = activeSessionId;
+
+      if (activeSessionId) {
+        const existing = sessions.find(function (s) {
+          return s.id === activeSessionId;
+        });
+        name = promptSessionName(existing ? existing.name : defaultSessionName());
+        if (name === null) return;
+      } else {
+        name = promptSessionName(defaultSessionName());
+        if (name === null) return;
+        id = "s-" + Date.now();
+        activeSessionId = id;
+      }
+
+      const snap = getSessionSnapshot();
+      const entry = Object.assign({ id: id, name: name, savedAt: Date.now() }, snap);
+      const idx = sessions.findIndex(function (s) {
+        return s.id === id;
+      });
+      if (idx >= 0) sessions[idx] = entry;
+      else sessions.unshift(entry);
+
+      saveAllSessions(sessions);
+      saveSession();
+      renderSessionsList();
+      updateActiveSessionLabel();
+      showStatus(exportStatus, "Saved session: " + name, "ok");
+    }
+
+    function loadSavedSession(id) {
+      if (id === activeSessionId) return;
+
+      const sessions = loadAllSessions();
+      const target = sessions.find(function (s) {
+        return s.id === id;
+      });
+      if (!target) return;
+
+      if (codes.length) {
+        const msg = activeSessionId
+          ? "Switch sessions? The open saved session is updated as you scan. Continue?"
+          : "Switch sessions? Save the current draft first if you need it. Continue?";
+        if (!confirm(msg)) return;
+        if (activeSessionId) syncActiveSavedSession();
+      }
+
+      if (isScanning) void stopCamera();
+      activeSessionId = id;
+      applySessionSnapshot(target);
+      saveSession();
+      renderSessionsList();
+      updateActiveSessionLabel();
+      showStatus(exportStatus, "Loaded: " + target.name, "ok");
+    }
+
+    function deleteSavedSession(id) {
+      const sessions = loadAllSessions();
+      const s = sessions.find(function (x) {
+        return x.id === id;
+      });
+      if (!s) return;
+      if (!confirm('Delete saved session "' + s.name + '"?')) return;
+
+      saveAllSessions(
+        sessions.filter(function (x) {
+          return x.id !== id;
+        })
+      );
+      if (activeSessionId === id) {
+        activeSessionId = null;
+        updateActiveSessionLabel();
+      }
+      renderSessionsList();
+      showStatus(exportStatus, "Deleted session.", "info");
+    }
+
+    function startNewEmptySession() {
+      if (codes.length) {
+        if (
+          !confirm(
+            "Start a new empty session?\n\nYour current list is kept only if you tap Save current session first."
+          )
+        ) {
+          return;
+        }
+      }
+
+      if (isScanning) void stopCamera();
+      activeSessionId = null;
+      codes = [];
+      expectedCodes = [];
+      importExpected.value = "";
+      roomName.value = "";
+      lastAdded = null;
+      lastAddedAt = 0;
+      resetAutoScanStreak();
+      saveSession();
+      renderList();
+      renderSessionsList();
+      updateActiveSessionLabel();
+      showStatus(scanStatus, "New empty session — enter room and scan.", "info");
+      roomName.focus();
+    }
+
+    function renderSessionsList() {
+      const sessions = loadAllSessions();
+      if (!sessions.length) {
+        sessionsList.innerHTML = '<li class="sessions-empty">No saved sessions yet.</li>';
+        return;
+      }
+
+      sessionsList.innerHTML = sessions
+        .map(function (s) {
+          const active = s.id === activeSessionId;
+          const when = s.savedAt ? new Date(s.savedAt).toLocaleString() : "";
+          const meta =
+            (s.room || s.school || "No room") +
+            " · " +
+            (s.codes ? s.codes.length : 0) +
+            " codes";
+          return (
+            '<li class="session-item' +
+            (active ? " session-active" : "") +
+            '" data-id="' +
+            escapeHtml(s.id) +
+            '"><div class="session-main"><strong>' +
+            escapeHtml(s.name) +
+            '</strong><span class="session-meta">' +
+            escapeHtml(meta) +
+            '</span><span class="session-date">' +
+            escapeHtml(when) +
+            '</span></div><button type="button" class="session-delete" data-id="' +
+            escapeHtml(s.id) +
+            '">Delete</button></li>'
+          );
+        })
+        .join("");
+
+      sessionsList.querySelectorAll(".session-item").forEach(function (li) {
+        li.addEventListener("click", function (e) {
+          if (e.target.classList.contains("session-delete")) return;
+          loadSavedSession(li.getAttribute("data-id"));
+        });
+      });
+
+      sessionsList.querySelectorAll(".session-delete").forEach(function (btn) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          deleteSavedSession(btn.getAttribute("data-id"));
+        });
+      });
+    }
+
+    function getSortedCodes(source) {
+      const list = source.slice();
+      const sort = appSettings.listSort || "scan";
+      if (sort === "az") list.sort();
+      else if (sort === "za") list.sort().reverse();
+      return list;
+    }
+
+    function getFilteredSortedCodes() {
+      const q = listSearch.value.trim().toLowerCase();
+      let list = getSortedCodes(codes);
+      if (q) {
+        list = list.filter(function (code) {
+          return code.toLowerCase().indexOf(q) >= 0;
+        });
+      }
+      return list;
+    }
+
+    function getMissingExpected() {
+      if (!expectedCodes.length) return [];
+      const scanned = new Set(codes);
+      return expectedCodes.filter(function (code) {
+        return !scanned.has(code);
+      });
+    }
+
+    function updateCompareSummary() {
+      if (!expectedCodes.length) {
+        compareSummary.classList.add("hidden");
+        compareSummary.textContent = "";
+        importMissing.classList.add("hidden");
+        importMissing.textContent = "";
+        return;
+      }
+
+      const missing = getMissingExpected();
+      let extra = 0;
+      const expectedSet = new Set(expectedCodes);
+      codes.forEach(function (code) {
+        if (!expectedSet.has(code)) extra += 1;
+      });
+
+      compareSummary.textContent =
+        " · Expected " +
+        expectedCodes.length +
+        ", missing " +
+        missing.length +
+        ", extra " +
+        extra;
+      compareSummary.classList.remove("hidden");
+
+      if (missing.length) {
+        importMissing.textContent = "Not scanned yet: " + missing.join(", ");
+        importMissing.classList.remove("hidden");
+      } else {
+        importMissing.textContent = "All expected codes scanned.";
+        importMissing.classList.remove("hidden");
       }
     }
 
     function renderList() {
+      const display = getFilteredSortedCodes();
       scanCount.textContent = String(codes.length);
       emptyHint.classList.toggle("hidden", codes.length > 0);
-      scanList.innerHTML = codes
+      updateCompareSummary();
+
+      if (!display.length) {
+        scanList.innerHTML = "";
+        if (codes.length && listSearch.value.trim()) {
+          scanList.innerHTML =
+            '<li style="border:none;color:var(--muted);font-family:inherit;">No matches for search.</li>';
+        }
+        return;
+      }
+
+      const expectedSet = new Set(expectedCodes);
+      const showCompare = expectedCodes.length > 0;
+
+      scanList.innerHTML = display
         .map(function (code, i) {
+          const extra = showCompare && !expectedSet.has(code);
           return (
-            '<li><span class="idx">' +
+            '<li' +
+            (extra ? ' class="row-extra"' : "") +
+            '><span class="idx">' +
             (i + 1) +
             '.</span><span class="code">' +
             escapeHtml(code) +
-            '</span><button type="button" data-i="' +
-            i +
+            '</span><button type="button" data-code="' +
+            escapeHtml(code) +
             '">Remove</button></li>'
           );
         })
         .join("");
 
-      scanList.querySelectorAll("button[data-i]").forEach(function (btn) {
+      scanList.querySelectorAll("button[data-code]").forEach(function (btn) {
         btn.addEventListener("click", function () {
-          const idx = parseInt(btn.getAttribute("data-i"), 10);
-          if (idx >= 0 && idx < codes.length) {
+          const code = btn.getAttribute("data-code");
+          const idx = codes.indexOf(code);
+          if (idx >= 0) {
             codes.splice(idx, 1);
             saveSession();
             renderList();
           }
         });
       });
+    }
+
+    function parseImportedList(text) {
+      const lines = String(text || "").split(/\r?\n/);
+      const out = [];
+      lines.forEach(function (line) {
+        let s = normalizeCode(line);
+        if (!s) return;
+        if (/^(school|room|date|count|technician)\s*:/i.test(s)) return;
+        if (out.indexOf(s) < 0) out.push(s);
+      });
+      return out;
+    }
+
+    function getExportMeta() {
+      return {
+        school: sanitizePlainText(schoolName.value),
+        room: sanitizePlainText(roomName.value),
+        tech: sanitizePlainText(techName.value),
+        date: sanitizePlainText(new Date().toLocaleString()),
+        count: codes.length,
+      };
+    }
+
+    function csvEscape(value) {
+      const s = String(value == null ? "" : value);
+      if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
     }
 
     function escapeHtml(s) {
@@ -511,8 +1141,10 @@
 
     function feedbackAutoScan() {
       triggerCaptureFlash();
-      playShutterSound();
-      if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+      if (appSettings.scanSound !== false) playShutterSound();
+      if (appSettings.scanVibrate !== false && navigator.vibrate) {
+        navigator.vibrate([80, 40, 80]);
+      }
     }
 
     function addCode(raw, options) {
@@ -547,19 +1179,37 @@
     }
 
     function buildExportText() {
-      const school = sanitizePlainText(schoolName.value);
-      const room = sanitizePlainText(roomName.value);
+      const meta = getExportMeta();
       const lines = [];
-      const date = sanitizePlainText(new Date().toLocaleString());
-      if (school) lines.push("School: " + school);
-      if (room) lines.push("Room: " + room);
-      lines.push("Date: " + date);
-      lines.push("Count: " + String(codes.length));
+      if (meta.school) lines.push("School: " + meta.school);
+      if (meta.room) lines.push("Room: " + meta.room);
+      if (meta.tech) lines.push("Technician: " + meta.tech);
+      lines.push("Date: " + meta.date);
+      lines.push("Count: " + String(meta.count));
       lines.push("");
-      codes.forEach(function (c) {
+      getSortedCodes(codes).forEach(function (c) {
         lines.push(sanitizePlainText(c));
       });
       return lines.join("\n");
+    }
+
+    function buildExportCsv() {
+      const meta = getExportMeta();
+      const header = ["School", "Room", "Date", "Technician", "AssetTag"];
+      const rows = [header.map(csvEscape).join(",")];
+      const exportCodes = getSortedCodes(codes);
+      if (!exportCodes.length) {
+        rows.push(
+          [meta.school, meta.room, meta.date, meta.tech, ""].map(csvEscape).join(",")
+        );
+      } else {
+        exportCodes.forEach(function (code) {
+          rows.push(
+            [meta.school, meta.room, meta.date, meta.tech, code].map(csvEscape).join(",")
+          );
+        });
+      }
+      return rows.join("\n");
     }
 
     function exportSubjectLabel() {
@@ -646,6 +1296,7 @@
 
     function startAutoScan() {
       stopAutoScan();
+      if (!appSettings.autoScan) return;
       autoScanTimer = setInterval(function () {
         void tryAutoScanTick();
       }, AUTO_SCAN_INTERVAL_MS);
@@ -689,7 +1340,9 @@
     }
 
     async function tryAutoScanTick() {
-      if (!isScanning || !scanner || autoScanBusy || btnCapture.disabled) return;
+      if (!appSettings.autoScan || !isScanning || !scanner || autoScanBusy || btnCapture.disabled) {
+        return;
+      }
 
       const video = getScannerVideo();
       if (!video || !video.videoWidth) return;
@@ -727,6 +1380,7 @@
     }
 
     function onScanSuccess(decodedText, decodedResult) {
+      if (!appSettings.autoScan) return;
       if (!isScanInsidePreview(decodedResult)) return;
 
       const code = normalizeCode(decodedText);
@@ -746,6 +1400,97 @@
 
     function getScannerVideo() {
       return document.querySelector("#reader video");
+    }
+
+    function updateTorchButton() {
+      if (torchSupported && isScanning) {
+        btnTorch.classList.remove("hidden");
+        btnTorch.textContent = torchOn ? "Flashlight off" : "Flashlight on";
+        btnTorch.classList.toggle("torch-on", torchOn);
+      } else {
+        btnTorch.classList.add("hidden");
+      }
+    }
+
+    async function detectTorchSupport() {
+      torchSupported = false;
+      if (!scanner) {
+        updateTorchButton();
+        return;
+      }
+
+      try {
+        const caps = scanner.getRunningTrackCameraCapabilities();
+        if (caps && caps.torch) torchSupported = true;
+      } catch (e) {
+        console.debug("html5-qrcode torch caps", e);
+      }
+
+      if (!torchSupported) {
+        const video = getScannerVideo();
+        const track = video && video.srcObject && video.srcObject.getVideoTracks()[0];
+        if (track && typeof track.getCapabilities === "function") {
+          const caps = track.getCapabilities();
+          if (caps.torch) torchSupported = true;
+        }
+      }
+
+      updateTorchButton();
+    }
+
+    async function setTorch(on) {
+      if (!scanner || !isScanning || !torchSupported) return;
+
+      const attempts = [{ advanced: [{ torch: on }] }, { torch: on }];
+
+      for (let i = 0; i < attempts.length; i++) {
+        try {
+          await scanner.applyVideoConstraints(attempts[i]);
+          torchOn = on;
+          updateTorchButton();
+          return;
+        } catch (e) {
+          console.debug("torch attempt", i, e);
+        }
+      }
+
+      const video = getScannerVideo();
+      const track = video && video.srcObject && video.srcObject.getVideoTracks()[0];
+      if (track) {
+        for (let i = 0; i < attempts.length; i++) {
+          try {
+            await track.applyConstraints(attempts[i]);
+            torchOn = on;
+            updateTorchButton();
+            return;
+          } catch (e) {
+            console.debug("track torch attempt", i, e);
+          }
+        }
+      }
+
+      showStatus(scanStatus, "Could not toggle flashlight on this device.", "warn");
+    }
+
+    async function toggleTorch() {
+      await setTorch(!torchOn);
+    }
+
+    function startNewRoom() {
+      if (codes.length && !confirm("Start a new room? The current " + codes.length + " code(s) will be cleared.")) {
+        return;
+      }
+      if (activeSessionId) syncActiveSavedSession();
+      codes = [];
+      roomName.value = "";
+      lastAdded = null;
+      lastAddedAt = 0;
+      resetAutoScanStreak();
+      saveSession();
+      renderList();
+      hideStatus(exportStatus);
+      showStatus(scanStatus, "New room — enter room name and scan tags.", "info");
+      roomName.focus();
     }
 
     function isPreviewZoomActive() {
@@ -1098,6 +1843,8 @@
         } else {
           scannerWrap.classList.add("preview-zoom");
         }
+        torchOn = false;
+        await detectTorchSupport();
         startAutoScan();
 
         btnStart.classList.add("hidden");
@@ -1122,6 +1869,13 @@
 
     async function stopCamera() {
       stopAutoScan();
+      if (torchOn && torchSupported) {
+        try {
+          await setTorch(false);
+        } catch (e) {
+          console.debug("torch off", e);
+        }
+      }
       if (scanner) {
         try {
           if (isScanning) await scanner.stop();
@@ -1138,7 +1892,10 @@
       btnStart.disabled = false;
       btnStart.classList.remove("hidden");
       btnCapture.classList.add("hidden");
+      btnTorch.classList.add("hidden");
       btnStop.classList.add("hidden");
+      torchOn = false;
+      torchSupported = false;
     }
 
     btnStart.addEventListener("click", function () {
@@ -1146,7 +1903,9 @@
       void startCamera();
     });
     btnCapture.addEventListener("click", captureAndScan);
+    btnTorch.addEventListener("click", toggleTorch);
     btnStop.addEventListener("click", stopCamera);
+    btnNewRoom.addEventListener("click", startNewRoom);
 
     btnAddManual.addEventListener("click", function () {
       if (addCode(manualCode.value)) manualCode.value = "";
@@ -1162,6 +1921,56 @@
     schoolName.addEventListener("blur", saveSession);
     roomName.addEventListener("change", saveSession);
     roomName.addEventListener("blur", saveSession);
+    techName.addEventListener("change", saveSession);
+    techName.addEventListener("blur", saveSession);
+    listSearch.addEventListener("input", renderList);
+    listSort.addEventListener("change", function () {
+      appSettings.listSort = listSort.value;
+      saveSettings();
+      renderList();
+    });
+
+    btnToggleSessions.addEventListener("click", function () {
+      sessionsBody.classList.toggle("hidden");
+      const collapsed = sessionsBody.classList.contains("hidden");
+      btnToggleSessions.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      btnToggleSessions.textContent = collapsed ? "Saved sessions ▾" : "Saved sessions ▴";
+    });
+
+    btnSaveSession.addEventListener("click", saveCurrentSession);
+    btnNewSession.addEventListener("click", startNewEmptySession);
+
+    btnToggleSettings.addEventListener("click", function () {
+      settingsBody.classList.toggle("hidden");
+      const collapsed = settingsBody.classList.contains("hidden");
+      btnToggleSettings.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      btnToggleSettings.textContent = collapsed ? "Settings ▾" : "Settings ▴";
+    });
+
+    [setAutoScan, setScanSound, setScanVibrate].forEach(function (el) {
+      el.addEventListener("change", readSettingsFromUI);
+    });
+
+    btnApplyImport.addEventListener("click", function () {
+      expectedCodes = parseImportedList(importExpected.value);
+      saveSession();
+      renderList();
+      showStatus(
+        exportStatus,
+        expectedCodes.length
+          ? "Imported " + expectedCodes.length + " expected code(s)."
+          : "No codes found in import — check the format.",
+        expectedCodes.length ? "ok" : "warn"
+      );
+    });
+
+    btnClearImport.addEventListener("click", function () {
+      expectedCodes = [];
+      importExpected.value = "";
+      saveSession();
+      renderList();
+      showStatus(exportStatus, "Expected list cleared.", "info");
+    });
 
     btnCopy.addEventListener("click", async function () {
       if (!codes.length) {
@@ -1188,6 +1997,33 @@
       a.click();
       URL.revokeObjectURL(a.href);
       showStatus(exportStatus, "Download started — open the file on your computer.", "ok");
+    });
+
+    btnCopyCsv.addEventListener("click", async function () {
+      if (!codes.length) {
+        showStatus(exportStatus, "List is empty.", "warn");
+        return;
+      }
+      try {
+        await copyPlainText(buildExportCsv());
+        showStatus(exportStatus, "Copied CSV — paste or open in Excel.", "ok");
+      } catch (e) {
+        showStatus(exportStatus, "Copy failed. Use Download .csv instead.", "err");
+      }
+    });
+
+    btnDownloadCsv.addEventListener("click", function () {
+      if (!codes.length) {
+        showStatus(exportStatus, "List is empty.", "warn");
+        return;
+      }
+      const blob = new Blob([buildExportCsv()], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = safeFilename().replace(/\.txt$/i, ".csv");
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showStatus(exportStatus, "CSV download started — open in Excel on your computer.", "ok");
     });
 
     btnShare.addEventListener("click", async function () {
@@ -1257,9 +2093,13 @@
       if (document.hidden && isScanning) stopCamera();
     });
 
+    appSettings = loadSettings();
+    applySettingsToUI();
     loadSession();
     if (!schoolName.value.trim()) schoolName.value = DEFAULT_SCHOOL;
     renderList();
+    renderSessionsList();
+    updateActiveSessionLabel();
     const versionLabel = "v" + APP_VERSION;
     const appVersionBadge = document.getElementById("appVersionBadge");
     const appVersionEl = document.getElementById("appVersion");
