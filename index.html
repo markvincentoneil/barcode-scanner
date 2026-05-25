@@ -216,12 +216,16 @@
     </div>
   </div>
 
-  <footer>v<span id="appVersion">1.0.3</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+  <footer>v<span id="appVersion">1.0.4</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+
+  <audio id="shutterAudio" preload="auto" playsinline>
+    <source src="./shutter.mp3" type="audio/mpeg" />
+  </audio>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
-    const APP_VERSION = "1.0.3";
+    const APP_VERSION = "1.0.4";
     const TARGET_CAMERA_ZOOM = 2;
     const STORAGE_KEY = "barcode-scanner-v1-session";
     const DEFAULT_SCHOOL = "Abbotsford School District";
@@ -253,7 +257,8 @@
     let lastAdded = null;
     let lastAddedAt = 0;
     const DEDUPE_MS = 2000;
-    let audioCtx = null;
+    const shutterAudio = document.getElementById("shutterAudio");
+    let shutterAudioReady = false;
 
     function showStatus(el, msg, type) {
       el.textContent = msg;
@@ -345,33 +350,41 @@
       }, 450);
     }
 
-    function playScanBeep() {
+    async function unlockShutterAudio() {
+      if (!shutterAudio || shutterAudioReady) return;
       try {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return;
-        if (!audioCtx) audioCtx = new Ctx();
-        if (audioCtx.state === "suspended") {
-          audioCtx.resume();
-        }
-        const t = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.frequency.value = 880;
-        osc.type = "sine";
-        gain.gain.setValueAtTime(0.2, t);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
-        osc.start(t);
-        osc.stop(t + 0.15);
+        shutterAudio.volume = 1;
+        shutterAudio.muted = true;
+        await shutterAudio.play();
+        shutterAudio.pause();
+        shutterAudio.currentTime = 0;
+        shutterAudio.muted = false;
+        shutterAudioReady = true;
       } catch (e) {
-        console.debug("playScanBeep", e);
+        console.debug("unlockShutterAudio", e);
+      }
+    }
+
+    function playShutterSound() {
+      if (!shutterAudio) return;
+      try {
+        shutterAudio.muted = false;
+        shutterAudio.volume = 1;
+        shutterAudio.currentTime = 0;
+        const playPromise = shutterAudio.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(function (e) {
+            console.debug("playShutterSound", e);
+          });
+        }
+      } catch (e) {
+        console.debug("playShutterSound", e);
       }
     }
 
     function feedbackAutoScan() {
       triggerCaptureFlash();
-      playScanBeep();
+      playShutterSound();
       if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
     }
 
@@ -690,13 +703,7 @@
 
       hideStatus(scanStatus);
       btnStart.disabled = true;
-      try {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (Ctx && !audioCtx) audioCtx = new Ctx();
-        if (audioCtx && audioCtx.state === "suspended") await audioCtx.resume();
-      } catch (e) {
-        console.debug("audio init", e);
-      }
+      await unlockShutterAudio();
       scannerWrap.classList.remove("hidden");
       showStatus(scanStatus, "Starting camera…", "info");
 

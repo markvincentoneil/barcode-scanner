@@ -1,9 +1,10 @@
-const CACHE = "barcode-scanner-v1-4";
+const CACHE = "barcode-scanner-v1-5";
 
 const PRECACHE = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./shutter.mp3",
   "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js",
   "https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js",
 ];
