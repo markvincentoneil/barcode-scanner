@@ -86,16 +86,16 @@
       border-radius: 10px;
       overflow: hidden;
       background: #000;
-      min-height: 220px;
+      min-height: 110px;
     }
     #reader {
       overflow: hidden;
-      min-height: 220px;
+      min-height: 110px;
     }
     #reader video {
       width: 100% !important;
-      max-height: none !important;
-      min-height: 220px !important;
+      min-height: 110px !important;
+      max-height: 110px !important;
       object-fit: cover;
       transform-origin: center center;
     }
@@ -199,7 +199,7 @@
 <body>
   <div class="app-header">
     <h1>Barcode Scanner</h1>
-    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.0.6</span>
+    <span id="appVersionBadge" class="version-badge" aria-label="App version">v1.0.7</span>
   </div>
   <p class="subtitle">Scan asset tags in a room, then export a text list for your computer.</p>
 
@@ -243,7 +243,7 @@
     </div>
   </div>
 
-  <footer>v<span id="appVersion">1.0.6</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+  <footer>v<span id="appVersion">1.0.7</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
 
   <audio id="shutterAudio" preload="auto" playsinline>
     <source src="./shutter.mp3" type="audio/mpeg" />
@@ -252,7 +252,7 @@
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
-    const APP_VERSION = "1.0.6";
+    const APP_VERSION = "1.0.7";
     const TARGET_CAMERA_ZOOM = 2;
     const STORAGE_KEY = "barcode-scanner-v1-session";
     const DEFAULT_SCHOOL = "Abbotsford School District";
@@ -677,7 +677,7 @@
 
     function qrboxForAssetTag(viewfinderWidth, viewfinderHeight) {
       const w = Math.max(200, Math.floor(viewfinderWidth * 0.88));
-      const h = Math.max(72, Math.floor(Math.min(viewfinderHeight, 280) * 0.32));
+      const h = Math.max(40, Math.floor(Math.min(viewfinderHeight, 140) * 0.32));
       return { width: w, height: h };
     }
 
