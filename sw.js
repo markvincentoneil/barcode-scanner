@@ -1,4 +1,4 @@
-const CACHE = "barcode-scanner-v1-2";
+const CACHE = "barcode-scanner-v1-3";
 
 const PRECACHE = [
   "./",

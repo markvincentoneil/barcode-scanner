@@ -62,12 +62,21 @@
       border-radius: 10px;
       overflow: hidden;
       background: #000;
-      min-height: 160px;
+      min-height: 220px;
+    }
+    #reader {
+      overflow: hidden;
+      min-height: 220px;
     }
     #reader video {
       width: 100% !important;
-      max-height: 200px !important;
+      max-height: none !important;
+      min-height: 220px !important;
       object-fit: cover;
+      transform-origin: center center;
+    }
+    .scanner-wrap.preview-zoom #reader video {
+      transform: scale(2);
     }
     .btn {
       display: block;
@@ -183,12 +192,13 @@
     </div>
   </div>
 
-  <footer>v<span id="appVersion">1.0.1</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
+  <footer>v<span id="appVersion">1.0.2</span> · HTTPS required for camera · List saved on this device until you clear it</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script>
-    const APP_VERSION = "1.0.1";
+    const APP_VERSION = "1.0.2";
+    const TARGET_CAMERA_ZOOM = 2;
     const STORAGE_KEY = "barcode-scanner-v1-session";
 
     const roomName = document.getElementById("roomName");
@@ -387,8 +397,8 @@
         canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
         return canvas;
       }
-      const cropW = Math.floor(video.videoWidth * 0.92);
-      const cropH = Math.floor(video.videoHeight * 0.45);
+      const cropW = Math.floor(video.videoWidth * 0.75);
+      const cropH = Math.floor(video.videoHeight * 0.35);
       const sx = Math.floor((video.videoWidth - cropW) / 2);
       const sy = Math.floor((video.videoHeight - cropH) / 2);
       canvas.width = cropW;
@@ -516,6 +526,61 @@
       if (readerEl) readerEl.innerHTML = "";
     }
 
+    function buildCameraRequest(facingMode) {
+      return {
+        facingMode: facingMode,
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        advanced: [{ zoom: TARGET_CAMERA_ZOOM }],
+      };
+    }
+
+    function qrboxForAssetTag(viewfinderWidth, viewfinderHeight) {
+      const w = Math.max(200, Math.floor(viewfinderWidth * 0.88));
+      const h = Math.max(72, Math.floor(Math.min(viewfinderHeight, 280) * 0.32));
+      return { width: w, height: h };
+    }
+
+    async function applyPreferredZoom() {
+      const video = getScannerVideo();
+      const track = video && video.srcObject && video.srcObject.getVideoTracks()[0];
+      if (track && typeof track.getCapabilities === "function") {
+        const caps = track.getCapabilities();
+        if (caps.zoom) {
+          const z = Math.min(
+            caps.zoom.max,
+            Math.max(caps.zoom.min, TARGET_CAMERA_ZOOM)
+          );
+          const tries = [{ advanced: [{ zoom: z }] }, { zoom: z }];
+          for (let i = 0; i < tries.length; i++) {
+            try {
+              await track.applyConstraints(tries[i]);
+              return z;
+            } catch (e) {
+              console.debug("track zoom", i, e);
+            }
+          }
+        }
+      }
+
+      if (scanner && typeof scanner.applyVideoConstraints === "function") {
+        const tries = [
+          { advanced: [{ zoom: TARGET_CAMERA_ZOOM }] },
+          { zoom: TARGET_CAMERA_ZOOM },
+        ];
+        for (let i = 0; i < tries.length; i++) {
+          try {
+            await scanner.applyVideoConstraints(tries[i]);
+            return TARGET_CAMERA_ZOOM;
+          } catch (e) {
+            console.debug("scanner zoom", i, e);
+          }
+        }
+      }
+
+      return null;
+    }
+
     async function startCamera() {
       if (isScanning) return;
       if (typeof Html5Qrcode === "undefined") {
@@ -549,8 +614,18 @@
           Html5QrcodeSupportedFormats.DATA_MATRIX,
         ];
 
-        const config = { fps: 10, formatsToSupport, disableFlip: false };
-        const attempts = [{ facingMode: "environment" }, { facingMode: "user" }];
+        const config = {
+          fps: 10,
+          formatsToSupport,
+          disableFlip: false,
+          qrbox: qrboxForAssetTag,
+        };
+        const attempts = [
+          buildCameraRequest("environment"),
+          buildCameraRequest("user"),
+          { facingMode: "environment" },
+          { facingMode: "user" },
+        ];
         let err = null;
 
         for (let i = 0; i < attempts.length; i++) {
@@ -573,12 +648,23 @@
         if (err) throw err;
 
         isScanning = true;
+
+        const zoomLevel = await applyPreferredZoom();
+        if (zoomLevel) {
+          scannerWrap.classList.remove("preview-zoom");
+        } else {
+          scannerWrap.classList.add("preview-zoom");
+        }
+
         btnStart.classList.add("hidden");
         btnCapture.classList.remove("hidden");
         btnStop.classList.remove("hidden");
+        const zoomHint = zoomLevel
+          ? " Zoom " + zoomLevel + "× on."
+          : " Hold the phone closer if the tag looks small.";
         showStatus(
           scanStatus,
-          "Point at each tag — it may scan automatically, or tap Scan now.",
+          "Center the tag in the box — auto-scan or tap Scan now." + zoomHint,
           "ok"
         );
       } catch (e) {
@@ -601,6 +687,7 @@
       isScanning = false;
       clearReaderElement();
       scannerWrap.classList.add("hidden");
+      scannerWrap.classList.remove("preview-zoom");
       btnStart.disabled = false;
       btnStart.classList.remove("hidden");
       btnCapture.classList.add("hidden");
